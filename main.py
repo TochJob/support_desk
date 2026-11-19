@@ -33,7 +33,9 @@ def summarize_request(client: OpenAI, user_text:str) -> None:
         response = client.chat.completions.create(
             model=MODEL,
             reasoning_effort="low",
-            messages=message ,
+            messages=message,
+            temperature=TEMPERATURE,
+            max_completion_tokens=MAX_OUTPUT_TOKENS,
         )
     except openai.AuthenticationError:
         print("Ошибка авторизации: проверьте LLM_API_KEY.")
