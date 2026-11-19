@@ -1,4 +1,5 @@
 import  os
+from os import system
 from time import perf_counter
 
 import openai
@@ -8,6 +9,13 @@ from openai import OpenAI
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 MODEL = "gemini-3.1-flash-lite"
+SYSTEM_INSTRUCTION = (
+    "Ты помогаешь оператору службы поддержки. "
+    "Кратко пересказывай обращение одним предложением. "
+    "Используй только факты из обращения. "
+    "Не придумывай суммы, даты, причины и действия. "
+    "Если данных недостаточно, прямо сообщай об этом."
+)
 
 def summarize_request(client: OpenAI, user_text:str) -> None:
     text = user_text.strip()
@@ -21,16 +29,7 @@ def summarize_request(client: OpenAI, user_text:str) -> None:
         response = client.chat.completions.create(
             model=MODEL,
             reasoning_effort="low",
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Сформулируй краткое содержание обращения в одном "
-                        "предложении. Не добавляй факты, которых нет в тексте.\n\n"
-                        f"Обращение: {text}"
-                    ),
-                }
-            ]
+            messages= build_messages(text),
         )
     except openai.AuthenticationError:
         print("Ошибка авторизации: проверьте LLM_API_KEY.")
@@ -96,7 +95,18 @@ def main() -> None:
     summarize_request(client, user_text)
 
 
-
+def build_messages(user_text: str) -> list[dict[str, str]]:
+    wrapped_input = f"<user_message>\n{user_text}\n</user_message>"
+    return [
+        {
+            "role": "system",
+            "content": SYSTEM_INSTRUCTION,
+        },
+        {
+            "role": "user",
+            "content": wrapped_input,
+        },
+    ]
 
 
 if __name__ == "__main__":
