@@ -1,16 +1,14 @@
 import  os
-from os import system
 from time import perf_counter
 
 import openai
 
-from dotenv import load_dotenv
 from openai import OpenAI
+from pydantic import ValidationError
 
-BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-MODEL = "gemini-3.1-flash-lite"
-TEMPERATURE = 0.2
-MAX_OUTPUT_TOKENS = 80
+from config import Settings
+
+
 
 SYSTEM_INSTRUCTION = (
     "Ты помогаешь оператору службы поддержки. "
@@ -20,7 +18,7 @@ SYSTEM_INSTRUCTION = (
     "Если данных недостаточно, прямо сообщай об этом."
 )
 
-def summarize_request(client: OpenAI, user_text:str) -> None:
+def summarize_request(client: OpenAI, user_text:str, settings:Settings) -> None:
     text = user_text.strip()
     if not text:
         print("Ошибка: Поле не должно быть пустым")
@@ -31,11 +29,11 @@ def summarize_request(client: OpenAI, user_text:str) -> None:
 
     try:
         response = client.chat.completions.create(
-            model=MODEL,
+            model=settings.model,
             reasoning_effort="low",
             messages=message,
-            temperature=TEMPERATURE,
-            max_completion_tokens=MAX_OUTPUT_TOKENS,
+            temperature=settings.temperature,
+            max_completion_tokens=settings.max_output_tokens,
         )
     except openai.AuthenticationError:
         print("Ошибка авторизации: проверьте LLM_API_KEY.")
@@ -64,11 +62,11 @@ def summarize_request(client: OpenAI, user_text:str) -> None:
 
     elapsed_seconds = perf_counter() - started_at
     choice = response.choices[0]
-
+    print(choice)
     if choice.finish_reason == "length":
         print(
-            "Ответ модели остановлен из-за ограничения длины. "
-            "Увеличьте MAX_OUTPUT_TOKENS или сократите задачу."
+            "Ответ модели остановлен из-за ограничения длины: "
+            f"{settings.max_output_tokens} токенов."
         )
         return
 
@@ -110,14 +108,25 @@ def print_usage(usage)->None:
 
 
 def main() -> None:
-    load_dotenv()
-    token = os.getenv("LLM_API_KEY")
-    if not token:
-        raise Exception("Please set environment variable LLM_API_KEY")
+    try:
+        settings = Settings()
+    except ValidationError as error:
+        print("Ошибка конфигурации:")
+        for issue in error.errors():
+            field = ".".join(str(part) for part in issue["loc"])
+            print(f"- {field}: {issue['msg']}")
+        return
 
-    client = OpenAI(base_url=BASE_URL, api_key=token, timeout=30, max_retries=3)
-    user_text = input('Введите текст сообщения: ')
-    summarize_request(client, user_text)
+    client = OpenAI(
+        base_url=str(settings.base_url),
+        api_key=settings.llm_api_key.get_secret_value(),
+    )
+
+    print(f"Окружение: {settings.app_env}")
+    print(f"Модель: {settings.model}")
+
+    user_text = input("Введите текст обращения: ")
+    summarize_request(client, user_text, settings)
 
 
 def build_messages(user_text: str) -> list[dict[str, str]]:
@@ -144,6 +153,7 @@ def validate_summary(summary: str | None) -> str:
         raise ValueError("Резюме получилось слишком длинным")
 
     return cleaned
+
 
 if __name__ == "__main__":
     main()
