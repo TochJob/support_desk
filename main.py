@@ -6,7 +6,6 @@ from app.config import Settings
 from app.llm.client import LLMResult, LLMClient
 
 import openai
-from openai import OpenAI
 
 
 SYSTEM_INSTRUCTION = (
@@ -17,23 +16,17 @@ SYSTEM_INSTRUCTION = (
     "Если данных недостаточно, прямо сообщай об этом."
 )
 
-def summarize_request(client: OpenAI, user_text:str, settings:Settings) -> None:
+def summarize_request(client: LLMClient, user_text:str, settings:Settings) -> None:
     text = user_text.strip()
     if not text:
         print("Ошибка: Поле не должно быть пустым")
         return
 
     started_at = perf_counter()
-    message = build_messages(text)
+    messages = build_messages(text)
 
     try:
-        response = client.chat.completions.create(
-            model=settings.model,
-            reasoning_effort="low",
-            messages=message,
-            temperature=settings.temperature,
-            max_completion_tokens=settings.max_output_tokens,
-        )
+        result = client.generate(messages)
     except openai.AuthenticationError:
         print("Ошибка авторизации: проверьте LLM_API_KEY.")
         return
@@ -60,24 +53,22 @@ def summarize_request(client: OpenAI, user_text:str, settings:Settings) -> None:
 
 
     elapsed_seconds = perf_counter() - started_at
-    choice = response.choices[0]
-    print(choice)
-    if choice.finish_reason == "length":
+    if result.finish_reason == "length":
         print(
             "Ответ модели остановлен из-за ограничения длины: "
             f"{settings.max_output_tokens} токенов."
         )
         return
 
-    if choice.finish_reason != "stop":
+    if result.finish_reason != "stop":
         print(
             "Модель не вернула готовое резюме. "
-            f"Причина завершения: {choice.finish_reason}."
+            f"Причина завершения: {result.finish_reason}."
         )
         return
 
     try:
-        answer = validate_summary(choice.message.content)
+        answer = validate_summary(result.text)
     except ValueError as error:
         print(f"Некорректный ответ модели: {error}")
         return
@@ -86,14 +77,12 @@ def summarize_request(client: OpenAI, user_text:str, settings:Settings) -> None:
     print(answer)
 
     print("\nМетрики:")
-    print(f"Модель: {response.model}")
-    print(f"Завершение: {choice.finish_reason}")
+    print(f"Модель: {result.model}")
+    print(f"Завершение: {result.finish_reason}")
     print(f"Время: {elapsed_seconds:.2f} с")
 
 
-    print_usage(response.usage)
-
-    print(f"ID ответа: {response.id}")
+    print(f"ID ответа: {result.response_id}")
 
 
 def print_usage(result:LLMResult)->None:
@@ -116,10 +105,7 @@ def main() -> None:
             print(f"- {field}: {issue['msg']}")
         return
 
-    client = OpenAI(
-        base_url=str(settings.base_url),
-        api_key=settings.llm_api_key.get_secret_value(),
-    )
+    client = LLMClient(settings)
 
     print(f"Окружение: {settings.app_env}")
     print(f"Модель: {settings.model}")

@@ -24,14 +24,13 @@ class LLMClient:
             base_url=str(settings.base_url),
             api_key=settings.llm_api_key.get_secret_value(),
         )
-    def generate(self, message: list[Message]) -> LLMResult:
+    def generate(self, messages: list[Message]) -> LLMResult:
         response = self._client.chat.completions.create(
             model=self._settings.model,
-            message=message,
+            messages=messages,
             temperature=self._settings.temperature,
             max_completion_tokens=self._settings.max_output_tokens
         )
-
         choice = response.choices[0]
         usage = response.usage
 
