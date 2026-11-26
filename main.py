@@ -1,13 +1,12 @@
-import  os
 from time import perf_counter
 
-import openai
-
-from openai import OpenAI
 from pydantic import ValidationError
 
-from config import Settings
+from app.config import Settings
+from app.llm.client import LLMResult, LLMClient
 
+import openai
+from openai import OpenAI
 
 
 SYSTEM_INSTRUCTION = (
@@ -97,14 +96,14 @@ def summarize_request(client: OpenAI, user_text:str, settings:Settings) -> None:
     print(f"ID ответа: {response.id}")
 
 
-def print_usage(usage)->None:
-    if usage is None:
+def print_usage(result:LLMResult)->None:
+    if result.total_tokens is None:
         print("Провайдер не вернул статистику токенов")
         return
 
-    print(f"Входные токены: {usage.prompt_tokens}")
-    print(f"Выходные токены: {usage.completion_tokens}")
-    print(f"Всего токенов: {usage.total_tokens}")
+    print(f"Входные токены: {result.prompt_tokens}")
+    print(f"Выходные токены: {result.completion_tokens}")
+    print(f"Всего токенов: {result.total_tokens}")
 
 
 def main() -> None:
